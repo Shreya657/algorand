@@ -1,9 +1,13 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useTheme } from '../contexts/ThemeContext.jsx';
 import { 
   connectWallet, 
   getConnectedWallet, 
   isWalletConnected,
   createBadgeAsset, 
+  createBadgeAssetTest,  // Add test function
+  createRealBadgeAsset,  // Add real function
   generateClaimUrl,
   utils 
 } from '../utils/algorand';
@@ -12,6 +16,8 @@ import'../styles/Organizer.css'
 const Organizer = () => {
   const [walletAddress, setWalletAddress] = useState(null);
   const [isConnecting, setIsConnecting] = useState(false);
+  const { darkMode } = useTheme();
+  const navigate = useNavigate();
   
   // Event Form State
   const [eventForm, setEventForm] = useState({
@@ -25,6 +31,7 @@ const Organizer = () => {
   const [createdBadges, setCreatedBadges] = useState([]);
   const [isCreatingBadge, setIsCreatingBadge] = useState(false);
   const [currentBadgeType, setCurrentBadgeType] = useState('');
+  const [isRealMode, setIsRealMode] = useState(false); // Toggle for real vs test mode
 
   // Check wallet connection on mount
   useEffect(() => {
@@ -53,6 +60,11 @@ const Organizer = () => {
       setCreatedBadges(JSON.parse(savedBadges));
     }
   }, []);
+
+  // Navigate to home
+  const navigateToHome = () => {
+    navigate('/');
+  };
 
   const handleConnectWallet = async () => {
     setIsConnecting(true);
@@ -101,7 +113,16 @@ const Organizer = () => {
     try {
       console.log(`Creating ${badgeType} badge for ${eventForm.eventName}...`);
       
-      const result = await createBadgeAsset(eventForm.eventName, badgeType);
+      let result;
+      if (isRealMode) {
+        console.log('Using REAL mode - creating actual ASA on Algorand testnet');
+        console.log('📱 Please check your Pera Wallet mobile app to approve the transaction');
+        result = await createRealBadgeAsset(eventForm.eventName, badgeType);
+      } else {
+        console.log('Using TEST mode - simulating badge creation');
+        result = await createBadgeAssetTest(eventForm.eventName, badgeType);
+      }
+      
       console.log('Badge creation result:', result);
       
       if (result.success) {
@@ -126,8 +147,28 @@ const Organizer = () => {
         // Save to localStorage
         localStorage.setItem('createdBadges', JSON.stringify(updatedBadges));
         
-        alert(`${badgeType} badge created successfully! Asset ID: ${result.assetId}`);
+        const modeText = isRealMode ? 'Real ASA' : 'Test badge';
+        alert(`${badgeType} ${modeText} created successfully! Asset ID: ${result.assetId}`);
       } else {
+        // Handle wallet signing issues specifically
+        if (result.error && result.error.includes('Wallet signing timeout')) {
+          const retryMessage = `Wallet signing failed. This often happens when:
+
+1. Your Pera Wallet app is in the background
+2. The WalletConnect session expired
+3. Network connectivity issues
+
+🔄 Would you like to try TEST MODE instead?`;
+          const useTestMode = confirm(retryMessage);
+          
+          if (useTestMode && isRealMode) {
+            // Switch to test mode and retry
+            setIsRealMode(false);
+            alert('🔄 Switched to TEST MODE. Try creating the badge again.');
+            return;
+          }
+        }
+        
         alert('Failed to create badge: ' + result.error);
       }
     } catch (error) {
@@ -152,13 +193,48 @@ const Organizer = () => {
     }
   };
 
+  const deleteBadge = (badgeId) => {
+    const confirmDelete = window.confirm('Are you sure you want to delete this badge from the dashboard?\n\nNote: This only removes it from the UI. Real ASAs will still exist in your wallet.');
+    
+    if (confirmDelete) {
+      const updatedBadges = createdBadges.filter(badge => badge.id !== badgeId);
+      setCreatedBadges(updatedBadges);
+      
+      // Update localStorage
+      localStorage.setItem('createdBadges', JSON.stringify(updatedBadges));
+      
+      alert('Badge deleted from dashboard!');
+    }
+  };
+
   if (!walletAddress) {
     return (
-      <div className="organizer-container">
+      <div className={`organizer-container ${darkMode ? 'dark' : 'light'}`}>
+        {/* Navigation Bar */}
+        <nav className="navbar">
+          <div className="nav-container">
+            <div className="nav-logo" onClick={navigateToHome}>
+              <span className="chain-text">Chain</span>
+              <span className="badge-text">Badge</span>
+            </div>
+            
+            <div className="nav-actions">
+              {/* No theme toggle - controlled from home page */}
+            </div>
+          </div>
+        </nav>
+
         <div className="connect-prompt">
           <div className="connect-card">
-            <h2>Connect Your Pera Wallet</h2>
-            <p>You need to connect your Pera Wallet to create event badges</p>
+            <div className="connect-icon">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M21 18V6H7V4C7 3.45 6.55 3 6 3H3C2.45 3 2 3.45 2 4V20C2 20.55 2.45 21 3 21H6C6.55 21 7 20.55 7 20V18H21Z" stroke="currentColor" strokeWidth="2"/>
+                <rect x="7" y="6" width="14" height="12" rx="1" stroke="currentColor" strokeWidth="2"/>
+                <circle cx="17" cy="12" r="1" fill="currentColor"/>
+              </svg>
+            </div>
+            <h2>Connect Your Wallet</h2>
+            <p>You need to connect your wallet to create event badges and manage your blockchain assets</p>
             <button 
               className="connect-btn"
               onClick={handleConnectWallet}
@@ -170,10 +246,17 @@ const Organizer = () => {
                   <span>Connecting...</span>
                 </div>
               ) : (
-                'Connect Pera Wallet'
+                <>
+                  <svg className="wallet-icon" viewBox="0 0 24 24" fill="none">
+                    <path d="M21 18V6H7V4C7 3.45 6.55 3 6 3H3C2.45 3 2 3.45 2 4V20C2 20.55 2.45 21 3 21H6C6.55 21 7 20.55 7 20V18H21Z" stroke="currentColor" strokeWidth="2"/>
+                    <rect x="7" y="6" width="14" height="12" rx="1" stroke="currentColor" strokeWidth="2"/>
+                    <circle cx="17" cy="12" r="1" fill="currentColor"/>
+                  </svg>
+                  Connect Wallet
+                </>
               )}
             </button>
-            <p className="connect-hint">Scan QR code with Pera Wallet on your phone</p>
+            <p className="connect-hint">Scan QR code with your wallet app</p>
           </div>
         </div>
       </div>
@@ -181,18 +264,54 @@ const Organizer = () => {
   }
 
   return (
-    <div className="organizer-container">
+    <div className={`organizer-container ${darkMode ? 'dark' : 'light'}`}>
+      {/* Navigation Bar */}
+      <nav className="navbar">
+        <div className="nav-container">
+          <div className="nav-logo" onClick={navigateToHome}>
+            <span className="chain-text">Chain</span>
+            <span className="badge-text">Badge</span>
+          </div>
+          
+          <div className="nav-title">
+            <h1>Event Organizer</h1>
+          </div>
+
+          <div className="nav-actions">
+            <div className="wallet-connected-nav">
+              <span className="wallet-address-nav">{utils.formatAddress(walletAddress)}</span>
+              <div className="wallet-status">Connected</div>
+            </div>
+          </div>
+        </div>
+      </nav>
       {/* Header */}
       <div className="organizer-header">
         <div className="header-content">
           <div className="title-section">
-            <h1>Event Organizer Dashboard</h1>
+            <h1>Dashboard</h1>
             <p>Create blockchain-verified badges for your events</p>
           </div>
           <div className="wallet-info">
-            <div className="connected-wallet">
-              <div className="wallet-indicator"></div>
-              <span>Connected: {utils.formatAddress(walletAddress)}</span>
+            <div className="mode-toggle">
+              <label className="toggle-label">
+                <input
+                  type="checkbox"
+                  checked={isRealMode}
+                  onChange={(e) => setIsRealMode(e.target.checked)}
+                  className="toggle-input"
+                />
+                <span className="toggle-slider"></span>
+                <span className="toggle-text">
+                  {isRealMode ? '🌐 REAL MODE' : '🧪 TEST MODE'}
+                </span>
+              </label>
+              <div className="mode-description">
+                {isRealMode 
+                  ? 'Creates real ASAs on Algorand testnet' 
+                  : 'Simulates badge creation for testing'
+                }
+              </div>
             </div>
           </div>
         </div>
@@ -395,6 +514,13 @@ const Organizer = () => {
                     onClick={() => window.open(badge.claimUrl, '_blank')}
                   >
                     Test Claim
+                  </button>
+                  <button 
+                    className="action-btn delete-btn"
+                    onClick={() => deleteBadge(badge.id)}
+                    title="Delete badge from dashboard"
+                  >
+                    🗑️ Delete
                   </button>
                 </div>
               </div>

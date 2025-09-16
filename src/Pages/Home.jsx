@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { connectWallet, getConnectedWallet, disconnectWallet, utils } from '../utils/algorand';
 import { useNavigate } from 'react-router-dom';
+import { useTheme } from '../contexts/ThemeContext.jsx';
 import '../styles/Home.css'
 
 const Home = () => {
   const [walletAddress, setWalletAddress] = useState(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [showConnectingAnimation, setShowConnectingAnimation] = useState(false);
+  const [activeSection, setActiveSection] = useState('home');
+  const { darkMode, toggleDarkMode } = useTheme();
   const navigate = useNavigate();
 
   // Check if wallet is already connected on component mount
@@ -16,6 +19,15 @@ const Home = () => {
       setWalletAddress(connectedWallet);
     }
   }, []);
+
+  // Smooth scroll to section
+  const scrollToSection = (sectionId) => {
+    const element = document.getElementById(sectionId);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth' });
+      setActiveSection(sectionId);
+    }
+  };
 
   const handleConnectWallet = async () => {
     setIsConnecting(true);
@@ -58,9 +70,82 @@ const Home = () => {
   };
 
   return (
-    <div className="home-container">
+    <div className={`home-container ${darkMode ? 'dark' : 'light'}`}>
+      {/* Navigation Bar */}
+      <nav className="navbar">
+        <div className="nav-container">
+          <div className="nav-logo">
+            <span className="chain-text">Chain</span>
+            <span className="badge-text">Badge</span>
+          </div>
+          
+          <div className="nav-menu">
+            <button 
+              className={`nav-item ${activeSection === 'home' ? 'active' : ''}`}
+              onClick={() => scrollToSection('home')}
+            >
+              Home
+            </button>
+            <button 
+              className={`nav-item ${activeSection === 'about' ? 'active' : ''}`}
+              onClick={() => scrollToSection('about')}
+            >
+              About
+            </button>
+            <button 
+              className={`nav-item ${activeSection === 'faq' ? 'active' : ''}`}
+              onClick={() => scrollToSection('faq')}
+            >
+              FAQ
+            </button>
+            <button 
+              className={`nav-item ${activeSection === 'contact' ? 'active' : ''}`}
+              onClick={() => scrollToSection('contact')}
+            >
+              Contact Us
+            </button>
+          </div>
+
+          <div className="nav-actions">
+            <button className="theme-toggle" onClick={toggleDarkMode}>
+              {darkMode ? (
+                <svg viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="5" stroke="currentColor" strokeWidth="2"/>
+                  <line x1="12" y1="1" x2="12" y2="3" stroke="currentColor" strokeWidth="2"/>
+                  <line x1="12" y1="21" x2="12" y2="23" stroke="currentColor" strokeWidth="2"/>
+                  <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" stroke="currentColor" strokeWidth="2"/>
+                  <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" stroke="currentColor" strokeWidth="2"/>
+                  <line x1="1" y1="12" x2="3" y2="12" stroke="currentColor" strokeWidth="2"/>
+                  <line x1="21" y1="12" x2="23" y2="12" stroke="currentColor" strokeWidth="2"/>
+                  <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" stroke="currentColor" strokeWidth="2"/>
+                  <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" stroke="currentColor" strokeWidth="2"/>
+                </svg>
+              ) : (
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" stroke="currentColor" strokeWidth="2"/>
+                </svg>
+              )}
+            </button>
+            
+            {!walletAddress ? (
+              <button 
+                className={`connect-wallet-nav ${isConnecting ? 'connecting' : ''}`}
+                onClick={handleConnectWallet}
+                disabled={isConnecting}
+              >
+                {isConnecting ? 'Connecting...' : 'Connect Wallet'}
+              </button>
+            ) : (
+              <div className="wallet-connected-nav">
+                <span className="wallet-address-nav">{utils.formatAddress(walletAddress)}</span>
+                <button className="disconnect-nav" onClick={handleDisconnectWallet}>×</button>
+              </div>
+            )}
+          </div>
+        </div>
+      </nav>
       {/* Hero Section */}
-      <div className="hero-section">
+      <section id="home" className="hero-section">
         <div className="hero-content">
           <div className="logo-container">
             <div className="logo">
@@ -168,10 +253,59 @@ const Home = () => {
           <div className="floating-badge badge-4">🎯</div>
           <div className="floating-badge badge-5">💎</div>
         </div>
-      </div>
+      </section>
+
+      {/* About Section */}
+      <section id="about" className="about-section">
+        <div className="section-container">
+          <h2 className="section-title">About ChainBadge</h2>
+          <div className="about-content">
+            <div className="about-text">
+              <h3>Revolutionizing Event Verification</h3>
+              <p>
+                ChainBadge is a decentralized platform that transforms how events issue and verify achievements. 
+                Built on the Algorand blockchain, we provide a tamper-proof, transparent system for creating 
+                and managing digital badges.
+              </p>
+              <p>
+                Our mission is to eliminate fraud in event certification while providing participants with 
+                verifiable, portable achievements they truly own. No central authority can revoke or 
+                manipulate your earned badges.
+              </p>
+              
+              <div className="stats-grid">
+                <div className="stat-item">
+                  <div className="stat-number">1000+</div>
+                  <div className="stat-label">Badges Created</div>
+                </div>
+                <div className="stat-item">
+                  <div className="stat-number">500+</div>
+                  <div className="stat-label">Events Verified</div>
+                </div>
+                <div className="stat-item">
+                  <div className="stat-number">100%</div>
+                  <div className="stat-label">Decentralized</div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="about-visual">
+              <div className="blockchain-visual">
+                <div className="block">🏆</div>
+                <div className="connection"></div>
+                <div className="block">🎖️</div>
+                <div className="connection"></div>
+                <div className="block">⭐</div>
+                <div className="connection"></div>
+                <div className="block">🎯</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
 
       {/* Features Section */}
-      <div className="features-section">
+      <section className="features-section">
         <div className="features-container">
           <h2 className="features-title">Why ChainBadge?</h2>
           
@@ -209,21 +343,175 @@ const Home = () => {
             </div>
           </div>
         </div>
-      </div>
+      </section>
+
+      {/* FAQ Section */}
+      <section id="faq" className="faq-section">
+        <div className="section-container">
+          <h2 className="section-title">Frequently Asked Questions</h2>
+          <div className="faq-grid">
+            <div className="faq-item">
+              <h3>What is ChainBadge?</h3>
+              <p>
+                ChainBadge is a blockchain-based platform that allows event organizers to create 
+                verifiable digital badges and participants to claim them directly to their wallets.
+              </p>
+            </div>
+            
+            <div className="faq-item">
+              <h3>How do I claim a badge?</h3>
+              <p>
+                Simply connect your Algorand wallet, enter the event details or scan the QR code 
+                provided by the organizer, and claim your badge. It will be minted directly to your wallet.
+              </p>
+            </div>
+            
+            <div className="faq-item">
+              <h3>Are there any fees?</h3>
+              <p>
+                There are minimal Algorand network fees (typically 0.001 ALGO) for minting badges. 
+                Our platform doesn't charge additional fees for basic badge creation and claiming.
+              </p>
+            </div>
+            
+            <div className="faq-item">
+              <h3>Which wallets are supported?</h3>
+              <p>
+                We currently support MyAlgo Wallet and Pera Wallet. More wallet integrations 
+                are planned for future releases.
+              </p>
+            </div>
+            
+            <div className="faq-item">
+              <h3>Can badges be transferred?</h3>
+              <p>
+                Yes! Since badges are Algorand Standard Assets (ASAs), they can be transferred 
+                between wallets, traded, or displayed in any ASA-compatible platform.
+              </p>
+            </div>
+            
+            <div className="faq-item">
+              <h3>How do I verify a badge?</h3>
+              <p>
+                All badges are verifiable on the Algorand blockchain. You can check the asset ID 
+                on AlgoExplorer or any Algorand block explorer to verify authenticity and metadata.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Contact Section */}
+      <section id="contact" className="contact-section">
+        <div className="section-container">
+          <h2 className="section-title">Contact Us</h2>
+          <div className="contact-content">
+            <div className="contact-info">
+              <h3>Get in Touch</h3>
+              <p>
+                Have questions, suggestions, or need help with badge creation? 
+                We'd love to hear from you!
+              </p>
+              
+              <div className="contact-methods">
+                <div className="contact-method">
+                  <div className="contact-icon">
+                    <svg viewBox="0 0 24 24" fill="none">
+                      <path d="M4 4H20C21.1 4 22 4.9 22 6V18C22 19.1 21.1 20 20 20H4C2.9 20 2 19.1 2 18V6C2 4.9 2.9 4 4 4Z" stroke="currentColor" strokeWidth="2"/>
+                      <polyline points="22,6 12,13 2,6" stroke="currentColor" strokeWidth="2"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <div className="contact-label">Email</div>
+                    <div className="contact-value">support@chainbadge.com</div>
+                  </div>
+                </div>
+                
+                <div className="contact-method">
+                  <div className="contact-icon">
+                    <svg viewBox="0 0 24 24" fill="none">
+                      <path d="M9 19C-5 19 -5 5 9 5H15C29 5 29 19 15 19L9 19Z" stroke="currentColor" strokeWidth="2"/>
+                      <polyline points="15,9 19,12 15,15" stroke="currentColor" strokeWidth="2"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <div className="contact-label">Discord</div>
+                    <div className="contact-value">ChainBadge Community</div>
+                  </div>
+                </div>
+                
+                <div className="contact-method">
+                  <div className="contact-icon">
+                    <svg viewBox="0 0 24 24" fill="none">
+                      <path d="M9 11C9 12.66 10.34 14 12 14C13.66 14 15 12.66 15 11V5C15 3.34 13.66 2 12 2C10.34 2 9 3.34 9 5V11Z" stroke="currentColor" strokeWidth="2"/>
+                      <path d="M19 11C19 15.97 15.97 20 12 20C8.03 20 5 15.97 5 11" stroke="currentColor" strokeWidth="2"/>
+                      <line x1="12" y1="20" x2="12" y2="24" stroke="currentColor" strokeWidth="2"/>
+                      <line x1="8" y1="24" x2="16" y2="24" stroke="currentColor" strokeWidth="2"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <div className="contact-label">GitHub</div>
+                    <div className="contact-value">github.com/chainbadge</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="contact-form">
+              <h3>Send us a Message</h3>
+              <form className="message-form">
+                <div className="form-group">
+                  <label>Name</label>
+                  <input type="text" placeholder="Your name" />
+                </div>
+                
+                <div className="form-group">
+                  <label>Email</label>
+                  <input type="email" placeholder="your.email@example.com" />
+                </div>
+                
+                <div className="form-group">
+                  <label>Subject</label>
+                  <select>
+                    <option>General Inquiry</option>
+                    <option>Technical Support</option>
+                    <option>Partnership</option>
+                    <option>Bug Report</option>
+                    <option>Feature Request</option>
+                  </select>
+                </div>
+                
+                <div className="form-group">
+                  <label>Message</label>
+                  <textarea placeholder="Tell us how we can help you..."></textarea>
+                </div>
+                
+                <button type="submit" className="submit-btn">
+                  Send Message
+                  <svg viewBox="0 0 24 24" fill="none">
+                    <line x1="22" y1="2" x2="11" y2="13" stroke="currentColor" strokeWidth="2"/>
+                    <polygon points="22,2 15,22 11,13 2,9 22,2" stroke="currentColor" strokeWidth="2"/>
+                  </svg>
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </section>
 
       {/* Footer */}
-      <div className="footer">
+      <footer className="footer">
         <div className="footer-content">
           <div className="footer-text">
             Built on <span className="algorand-text">Algorand</span> • Powered by Web3
           </div>
           <div className="footer-links">
-            <a href="#" className="footer-link">About</a>
-            <a href="#" className="footer-link">Help</a>
-            <a href="#" className="footer-link">GitHub</a>
+            <a href="#about" className="footer-link" onClick={(e) => { e.preventDefault(); scrollToSection('about'); }}>About</a>
+            <a href="#faq" className="footer-link" onClick={(e) => { e.preventDefault(); scrollToSection('faq'); }}>Help</a>
+            <a href="#contact" className="footer-link" onClick={(e) => { e.preventDefault(); scrollToSection('contact'); }}>Contact</a>
           </div>
         </div>
-      </div>
+      </footer>
     </div>
   );
 };

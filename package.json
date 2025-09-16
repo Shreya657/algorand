@@ -13,7 +13,7 @@
     "@perawallet/connect": "^1.4.2",
     "@pinata/sdk": "^2.1.0",
     "@randlabs/myalgo-connect": "^1.4.2",
-    "algosdk": "^3.4.0",
+    "algosdk": "^2.7.0",
     "qrcode.react": "^4.2.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",

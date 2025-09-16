@@ -1,5 +1,57 @@
 import algosdk from 'algosdk';
 
+// IPFS Configuration (Optional)
+const IPFS_CONFIG = {
+  // Option 1: Use NFT.Storage (Free)
+  nftStorageKey: import.meta.env.VITE_NFT_STORAGE_KEY || null,
+  
+  // Option 2: Use Pinata
+  pinataApiKey: import.meta.env.VITE_PINATA_API_KEY || null,
+  pinataSecretKey: import.meta.env.VITE_PINATA_SECRET_KEY || null,
+  
+  // Option 3: Public IPFS gateway (for testing)
+  usePublicGateway: true
+};
+
+/**
+ * Upload metadata to IPFS (optional)
+ */
+const uploadToIPFS = async (metadata) => {
+  try {
+    // For now, return a placeholder URL
+    // You can implement actual IPFS upload here
+    if (IPFS_CONFIG.nftStorageKey) {
+      // TODO: Implement NFT.Storage upload
+      console.log('NFT.Storage upload would happen here');
+    } else if (IPFS_CONFIG.pinataApiKey) {
+      // TODO: Implement Pinata upload
+      console.log('Pinata upload would happen here');
+    }
+    
+    // Return placeholder for now
+    return `ipfs://QmPlaceholder${Date.now()}`;
+  } catch (error) {
+    console.error('IPFS upload failed:', error);
+    return "ipfs://placeholder";
+  }
+};
+
+/**
+ * Generate badge image URL
+ */
+const generateBadgeImageUrl = (badgeType, eventName) => {
+  // For now, use placeholder service
+  // In production, you'd generate/upload actual badge images
+  const colors = {
+    'Participant': '4F46E5',
+    'Speaker': '10B981', 
+    'Winner': 'F59E0B'
+  };
+  
+  const color = colors[badgeType] || '4F46E5';
+  return `https://via.placeholder.com/512x512/${color}/FFFFFF?text=${encodeURIComponent(badgeType + ' Badge')}`;
+};
+
 // Algorand Testnet Configuration
 const ALGORAND_CONFIG = {
   server: 'https://testnet-api.algonode.cloud',
@@ -170,7 +222,7 @@ export const getAccountBalance = async (address) => {
 /**
  * Create Badge Asset (ASA) - This is your NFT badge
  */
-export const createBadgeAsset = async (eventName, badgeType, recipientAddress = null) => {
+export const createBadgeAsset = async (eventName, badgeType, recipientAddress = "HQFGHKHUNPU4X265KWLNFTDHLFVZ5BZO2REZ2QQLTS5Q3ASELDQAVF7WHQ") => {
   console.log('createBadgeAsset called with:', { eventName, badgeType, recipientAddress });
   
   // Get the current connected account - check multiple sources
@@ -201,6 +253,29 @@ export const createBadgeAsset = async (eventName, badgeType, recipientAddress = 
   try {
     const wallet = await loadPeraWallet();
     
+    // Detailed wallet connection debugging
+    console.log('=== WALLET CONNECTION DEBUG ===');
+    console.log('Wallet object:', wallet);
+    console.log('Wallet connector:', wallet.connector);
+    console.log('Connector connected:', wallet.connector?.connected);
+    console.log('Connector accounts:', wallet.connector?.accounts);
+    
+    // Try to get current session info
+    try {
+      const sessionAccounts = await wallet.reconnectSession();
+      console.log('Session accounts:', sessionAccounts);
+      if (!sessionAccounts || sessionAccounts.length === 0) {
+        throw new Error('No active wallet session found. Please reconnect your Pera Wallet.');
+      }
+      // Update current account with session account
+      currentAccount = sessionAccounts[0];
+      connectedAccount = currentAccount;
+      console.log('Using session account:', currentAccount);
+    } catch (sessionError) {
+      console.error('Session reconnect failed:', sessionError);
+      throw new Error('Wallet session expired. Please disconnect and reconnect your Pera Wallet.');
+    }
+    
     // Get suggested parameters
     const suggestedParams = await algodClient.getTransactionParams().do();
     console.log('Got suggested params:', suggestedParams);
@@ -216,36 +291,90 @@ export const createBadgeAsset = async (eventName, badgeType, recipientAddress = 
     };
 
     console.log('Creating badge with metadata:', badgeMetadata);
+    console.log('Current account for transaction:', currentAccount);
+    console.log('Suggested params:', suggestedParams);
 
-    // Create asset creation transaction - use currentAccount instead of connectedAccount
-    const assetCreateTxn = algosdk.makeAssetCreateTxnWithSuggestedParamsFromObject({
-      from: currentAccount, // Use currentAccount here
-      total: 1,
+    // Validate all required parameters before proceeding
+    if (!currentAccount) {
+      throw new Error('Current account is null or undefined');
+    }
+    if (!suggestedParams) {
+      throw new Error('Suggested params is null or undefined');
+    }
+    if (!badgeMetadata.name) {
+      throw new Error('Badge name is null or undefined');
+    }
+
+    // Use the simplest possible approach - manually construct the transaction object
+    const txnParams = {
+      from: currentAccount,
+      total: 1,  // Use regular number instead of BigInt
       decimals: 0,
       assetName: badgeMetadata.name,
-      unitName: 'BADGE',
-      assetURL: `ipfs://placeholder`,
-      assetMetadataHash: undefined,
+      unitName: "BADGE",
+      assetURL: "ipfs://placeholder",
       defaultFrozen: false,
-      freeze: undefined,
-      manager: currentAccount, // Use currentAccount here too
-      clawback: undefined,
-      reserve: undefined,
-      strictEmptyAddressChecking: false,
-      suggestedParams
-    });
+      suggestedParams: suggestedParams
+      // Completely omit all optional address fields
+    };
+    
+    console.log('Creating transaction with minimal params:', txnParams);
+    
+    let assetCreateTxn;
+    try {
+      assetCreateTxn = algosdk.makeAssetCreateTxnWithSuggestedParamsFromObject(txnParams);
+      console.log('✅ Transaction created successfully');
+      console.log('Transaction details:', {
+        type: assetCreateTxn.type,
+        from: assetCreateTxn.from,
+        fee: assetCreateTxn.fee
+      });
+    } catch (txnError) {
+      console.error('❌ Transaction creation failed:', txnError);
+      throw new Error(`Transaction creation failed: ${txnError.message}`);
+    }
+
 
     console.log('Created transaction, signing...');
 
-    // Sign transaction with Pera Wallet - use currentAccount in signers
-    const signedTxns = await wallet.signTransaction([
-      [{ txn: assetCreateTxn, signers: [currentAccount] }]
-    ]);
+    // Ensure wallet is properly connected before signing
+    try {
+      // Check if wallet is still connected and try to reconnect if needed
+      if (!wallet.connector || !wallet.connector.connected) {
+        console.log('Wallet not connected, attempting to reconnect...');
+        const accounts = await wallet.reconnectSession();
+        if (!accounts || accounts.length === 0) {
+          throw new Error('Failed to reconnect wallet');
+        }
+        console.log('Wallet reconnected successfully');
+      }
+    } catch (reconnectError) {
+      console.log('Reconnect failed, wallet might not be properly connected:', reconnectError.message);
+      throw new Error('Please reconnect your Pera Wallet and try again');
+    }
+
+    // Sign transaction with Pera Wallet - try simplified signing method
+    console.log('Attempting to sign transaction...');
+    const signingPromise = wallet.signTransaction([[{
+      txn: assetCreateTxn
+    }]]);
+    
+    const signingTimeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Wallet signing timeout after 60 seconds - please check your Pera Wallet app')), 60000);
+    });
+    
+    console.log('Waiting for wallet signature...');
+    const signedTxns = await Promise.race([signingPromise, signingTimeoutPromise]);
 
     console.log('Transaction signed, submitting...');
 
-    // Submit transaction
-    const { txId } = await algodClient.sendRawTransaction(signedTxns[0]).do();
+    // Submit transaction with timeout
+    const submitPromise = algodClient.sendRawTransaction(signedTxns[0]).do();
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Transaction submission timeout after 30 seconds')), 30000);
+    });
+    
+    const { txId } = await Promise.race([submitPromise, timeoutPromise]);
     console.log('Transaction submitted with ID:', txId);
 
     // Wait for confirmation
@@ -301,7 +430,7 @@ export const transferBadge = async (assetId, recipientAddress) => {
 
     // Sign and submit
     const signedTxns = await wallet.signTransaction([
-      [{ txn: transferTxn, signers: [connectedAccount] }]
+      [{ txn: transferTxn }]
     ]);
     
     const { txId } = await algodClient.sendRawTransaction(signedTxns[0]).do();
@@ -343,7 +472,7 @@ export const optInToAsset = async (assetId) => {
     });
 
     const signedTxns = await wallet.signTransaction([
-      [{ txn: optInTxn, signers: [connectedAccount] }]
+      [{ txn: optInTxn }]
     ]);
     
     const { txId } = await algodClient.sendRawTransaction(signedTxns[0]).do();
@@ -477,13 +606,14 @@ export const getBadgesOwnedByAddress = async (address) => {
 };
 
 /**
- * Wait for transaction confirmation
+ * Wait for transaction confirmation with timeout
  */
-const waitForConfirmation = async (txId) => {
+const waitForConfirmation = async (txId, maxRounds = 10) => {
   let lastStatus = await algodClient.status().do();
   let lastRound = lastStatus['last-round'];
+  let currentRound = 0;
 
-  while (true) {
+  while (currentRound < maxRounds) {
     const pendingInfo = await algodClient.pendingTransactionInformation(txId).do();
     
     if (pendingInfo['confirmed-round'] !== null && pendingInfo['confirmed-round'] > 0) {
@@ -491,9 +621,17 @@ const waitForConfirmation = async (txId) => {
       return pendingInfo;
     }
 
+    if (pendingInfo['pool-error']) {
+      throw new Error(`Transaction failed: ${pendingInfo['pool-error']}`);
+    }
+
     lastRound++;
+    currentRound++;
+    console.log(`Waiting for confirmation... Round ${currentRound}/${maxRounds}`);
     await algodClient.statusAfterBlock(lastRound).do();
   }
+  
+  throw new Error(`Transaction ${txId} not confirmed after ${maxRounds} rounds`);
 };
 
 /**
@@ -539,5 +677,179 @@ export const utils = {
   
   formatAlgos: (microAlgos) => {
     return (microAlgos / 1000000).toFixed(2);
+  }
+};
+
+/**
+ * SIMPLE TEST FUNCTION - Create badge without wallet signing (for testing)
+ */
+export const createBadgeAssetTest = async (eventName, badgeType) => {
+  console.log('Creating test badge for:', { eventName, badgeType });
+  
+  // Simulate badge creation for testing
+  const testAssetId = Math.floor(Math.random() * 1000000) + 100000;
+  const testTxId = 'TEST_' + Date.now();
+  
+  const badgeMetadata = {
+    name: `${eventName} - ${badgeType} Badge`,
+    description: `Official ${badgeType} badge for ${eventName}`,
+    image: `https://via.placeholder.com/300x300/4F46E5/white?text=${badgeType}`,
+    event: eventName,
+    type: badgeType,
+    issued: new Date().toISOString()
+  };
+  
+  // Simulate async operation
+  await new Promise(resolve => setTimeout(resolve, 2000));
+  
+  console.log('Test badge created successfully!');
+  
+  return {
+    success: true,
+    assetId: testAssetId,
+    txId: testTxId,
+    metadata: badgeMetadata,
+    isTest: true
+  };
+};
+
+/**
+ * REAL ASA CREATION - Fixed wallet signing approach
+ */
+export const createRealBadgeAsset = async (eventName, badgeType, recipientAddress = null) => {
+  console.log('createRealBadgeAsset called with:', { eventName, badgeType, recipientAddress });
+  
+  // Get the current connected account
+  let currentAccount = connectedAccount || getConnectedWallet();
+  
+  if (!currentAccount) {
+    throw new Error('Please connect your Pera Wallet first');
+  }
+
+  console.log('Using connected account:', currentAccount);
+
+  try {
+    const wallet = await loadPeraWallet();
+    
+    // Ensure wallet is properly connected with fresh session
+    try {
+      // First check if connector exists and is connected
+      if (!wallet.connector || !wallet.connector.connected) {
+        console.log('❌ Wallet not connected, requesting fresh connection...');
+        throw new Error('Wallet session expired. Please reconnect your Pera Wallet.');
+      }
+      
+      // Try to get fresh session accounts
+      console.log('🔄 Refreshing wallet session...');
+      const sessionAccounts = await wallet.reconnectSession();
+      if (sessionAccounts && sessionAccounts.length > 0) {
+        currentAccount = sessionAccounts[0];
+        connectedAccount = currentAccount;
+        console.log('✅ Fresh session established with account:', currentAccount);
+      } else {
+        console.log('❌ No accounts in session');
+        throw new Error('No active wallet session. Please reconnect your Pera Wallet.');
+      }
+    } catch (sessionError) {
+      console.log('❌ Session check failed:', sessionError.message);
+      throw new Error('Wallet connection lost. Please disconnect and reconnect your Pera Wallet, then try again.');
+    }
+    
+    // Get suggested parameters
+    const suggestedParams = await algodClient.getTransactionParams().do();
+    console.log('Got suggested params:', suggestedParams);
+
+    // Badge metadata
+    const badgeMetadata = {
+      name: `${eventName} - ${badgeType} Badge`,
+      description: `Official ${badgeType} badge for ${eventName}`,
+      image: `https://via.placeholder.com/300x300/4F46E5/white?text=${badgeType}`,
+      event: eventName,
+      type: badgeType,
+      issued: new Date().toISOString()
+    };
+
+    console.log('Creating badge with metadata:', badgeMetadata);
+
+    // Create asset with minimal parameters (based on memory guidance)
+    const assetURL = await uploadToIPFS(badgeMetadata);
+    // Update the assetURL in the txnParams
+    const txnParams = {
+      from: currentAccount,
+      total: 1,  // Use regular number (not BigInt)
+      decimals: 0,
+      assetName: badgeMetadata.name,
+      unitName: "BADGE",
+      assetURL: assetURL, // Use the generated URL instead of placeholder
+      defaultFrozen: false,
+      suggestedParams: suggestedParams
+      // Omit optional address parameters as per memory guidance
+    };
+    
+    console.log('Creating transaction with params:', txnParams);
+    const assetCreateTxn = algosdk.makeAssetCreateTxnWithSuggestedParamsFromObject(txnParams);
+    console.log('✅ Transaction created successfully');
+
+    console.log('Requesting wallet signature...');
+    console.log('📱 Please check your Pera Wallet mobile app and approve the transaction');
+    console.log('🔍 If no notification appears, the wallet connection may need to be refreshed');
+    
+    // Try signing with timeout and retry logic
+    let signedTxns;
+    try {
+      // Create a promise that will timeout
+      const signingPromise = wallet.signTransaction([[{
+        txn: assetCreateTxn
+      }]]);
+      
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => {
+          reject(new Error('Signing timeout - no response from Pera Wallet after 30 seconds'));
+        }, 30000);
+      });
+      
+      console.log('⏳ Waiting for wallet signature (30 second timeout)...');
+      signedTxns = await Promise.race([signingPromise, timeoutPromise]);
+      
+    } catch (signingError) {
+      console.log('❌ Signing failed:', signingError.message);
+      if (signingError.message.includes('timeout') || signingError.message.includes('User rejected')) {
+        console.log('🔄 Wallet signing timeout - this might be due to WalletConnect session issues');
+        console.log('💡 Suggestion: Try closing and reopening your Pera Wallet mobile app, then reconnect');
+        throw new Error('Wallet signing timeout. This can happen due to WalletConnect session issues. Please:\n1. Close your Pera Wallet mobile app\n2. Reopen the app\n3. Disconnect and reconnect your wallet in the browser\n4. Try creating the badge again');
+      }
+      throw signingError;
+    }
+
+    console.log('✅ Transaction signed successfully');
+    console.log('Submitting to Algorand network...');
+
+    // Submit transaction
+    const { txId } = await algodClient.sendRawTransaction(signedTxns[0]).do();
+    console.log('Transaction submitted with ID:', txId);
+
+    // Wait for confirmation with timeout
+    const confirmedTxn = await waitForConfirmation(txId, 10);
+    
+    const assetId = confirmedTxn['asset-index'];
+    console.log('🎉 Real ASA created with Asset ID:', assetId);
+
+    // Update global state
+    connectedAccount = currentAccount;
+
+    return {
+      success: true,
+      assetId: assetId,
+      txId: txId,
+      metadata: badgeMetadata,
+      isTest: false // This is a real ASA
+    };
+
+  } catch (error) {
+    console.error('Real ASA creation failed:', error);
+    return {
+      success: false,
+      error: error.message || 'Failed to create real ASA'
+    };
   }
 };
