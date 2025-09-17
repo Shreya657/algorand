@@ -22,6 +22,7 @@ const Claim = () => {
   const [claimResult, setClaimResult] = useState(null);
   const [ownedBadges, setOwnedBadges] = useState([]);
   const [isLoadingBadges, setIsLoadingBadges] = useState(false);
+  const [showHiddenBadges, setShowHiddenBadges] = useState(false);
   
   // Navigate to home
   const navigateToHome = () => {
@@ -45,7 +46,7 @@ const Claim = () => {
         const isConnected = await isWalletConnected();
         if (isConnected) {
           setWalletAddress(connectedWallet);
-          loadOwnedBadges(connectedWallet);
+          loadOwnedBadges(connectedWallet, showHiddenBadges);
         } else {
           setWalletAddress(null);
         }
@@ -61,7 +62,7 @@ const Claim = () => {
       const result = await connectWallet();
       if (result.success) {
         setWalletAddress(result.address);
-        loadOwnedBadges(result.address);
+        loadOwnedBadges(result.address, showHiddenBadges);
       } else {
         alert('Failed to connect wallet: ' + result.error);
       }
@@ -72,22 +73,41 @@ const Claim = () => {
     }
   };
 
-  const loadOwnedBadges = async (address) => {
+  const loadOwnedBadges = async (address, includeHidden = false) => {
     setIsLoadingBadges(true);
     try {
       // Load real blockchain badges
       const realBadges = await getBadgesOwnedByAddress(address);
       
-      // Load test badges from localStorage
-      const testBadges = JSON.parse(localStorage.getItem('testBadges') || '[]');
+      // Load test badges from localStorage using claimer-specific key
+      const testBadges = JSON.parse(localStorage.getItem(`claimedBadges_${address}`) || '[]');
       
-      // Combine real and test badges
-      const allBadges = [...realBadges, ...testBadges];
+      let visibleRealBadges = realBadges;
+      
+      if (!includeHidden) {
+        // Load hidden badges list to filter out permanently hidden badges
+        const hiddenBadges = JSON.parse(localStorage.getItem(`hiddenBadges_${address}`) || '[]');
+        
+        // Filter out hidden real badges
+        visibleRealBadges = realBadges.filter(badge => 
+          !hiddenBadges.includes(badge.assetId.toString())
+        );
+      } else {
+        // Mark hidden badges when showing all
+        const hiddenBadges = JSON.parse(localStorage.getItem(`hiddenBadges_${address}`) || '[]');
+        visibleRealBadges = realBadges.map(badge => ({
+          ...badge,
+          isHidden: hiddenBadges.includes(badge.assetId.toString())
+        }));
+      }
+      
+      // Combine visible real badges and test badges
+      const allBadges = [...visibleRealBadges, ...testBadges];
       setOwnedBadges(allBadges);
     } catch (error) {
       console.error('Error loading badges:', error);
       // If blockchain call fails, at least show test badges
-      const testBadges = JSON.parse(localStorage.getItem('testBadges') || '[]');
+      const testBadges = JSON.parse(localStorage.getItem(`claimedBadges_${address}`) || '[]');
       setOwnedBadges(testBadges);
     } finally {
       setIsLoadingBadges(false);
@@ -115,9 +135,10 @@ const Claim = () => {
       if (result.success) {
         // Handle badge storage based on whether it's test or real
         if (result.isTest) {
-          // For test badges, store them locally
-          const testBadges = JSON.parse(localStorage.getItem('testBadges') || '[]');
+          // For test badges, store them locally using claimer-specific key
+          const testBadges = JSON.parse(localStorage.getItem(`claimedBadges_${walletAddress}`) || '[]');
           const newTestBadge = {
+            id: `badge_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`, // Add unique ID for deletion
             assetId: result.assetId,
             name: result.badgeInfo.name,
             unitName: 'BADGE',
@@ -126,13 +147,13 @@ const Claim = () => {
             claimedAt: new Date().toISOString()
           };
           testBadges.push(newTestBadge);
-          localStorage.setItem('testBadges', JSON.stringify(testBadges));
+          localStorage.setItem(`claimedBadges_${walletAddress}`, JSON.stringify(testBadges));
           
           // Update owned badges to include test badges
           setOwnedBadges(prev => [...prev, newTestBadge]);
         } else {
           // For real badges, reload from blockchain
-          await loadOwnedBadges(walletAddress);
+          await loadOwnedBadges(walletAddress, showHiddenBadges);
         }
       }
     } catch (error) {
@@ -161,6 +182,58 @@ const Claim = () => {
       ...prev,
       [name]: value
     }));
+  };
+
+  const deleteBadge = (badgeId, isTestBadge, assetId) => {
+    const message = isTestBadge 
+      ? 'Are you sure you want to remove this test badge from your dashboard?\n\nNote: This only removes it from the local UI. It does not affect any blockchain assets.'
+      : 'Are you sure you want to permanently hide this badge from your dashboard?\n\n⚠️ IMPORTANT: This will permanently hide the badge even after page reloads. The real ASA will still exist in your wallet and on the blockchain, but it will no longer appear in this dashboard.';
+    
+    const confirmDelete = window.confirm(message);
+    
+    if (confirmDelete) {
+      if (isTestBadge) {
+        // Remove test badge from localStorage
+        const testBadges = JSON.parse(localStorage.getItem(`claimedBadges_${walletAddress}`) || '[]');
+        const updatedTestBadges = testBadges.filter(badge => badge.id !== badgeId && badge.assetId !== badgeId);
+        localStorage.setItem(`claimedBadges_${walletAddress}`, JSON.stringify(updatedTestBadges));
+      } else {
+        // Add real badge to hidden list for permanent hiding
+        const hiddenBadges = JSON.parse(localStorage.getItem(`hiddenBadges_${walletAddress}`) || '[]');
+        const assetIdStr = assetId ? assetId.toString() : badgeId.toString().replace('real_', '');
+        if (!hiddenBadges.includes(assetIdStr)) {
+          hiddenBadges.push(assetIdStr);
+          localStorage.setItem(`hiddenBadges_${walletAddress}`, JSON.stringify(hiddenBadges));
+        }
+      }
+      
+      // Reload badges to apply the permanent filter
+      loadOwnedBadges(walletAddress, showHiddenBadges);
+      
+      alert(isTestBadge ? 'Test badge removed from dashboard!' : 'Badge permanently hidden from dashboard! It will not appear even after page reloads.');
+    }
+  };
+
+  const restoreBadge = (assetId) => {
+    const confirmRestore = window.confirm('Are you sure you want to restore this badge to your dashboard?');
+    
+    if (confirmRestore) {
+      // Remove from hidden list
+      const hiddenBadges = JSON.parse(localStorage.getItem(`hiddenBadges_${walletAddress}`) || '[]');
+      const updatedHiddenBadges = hiddenBadges.filter(id => id !== assetId.toString());
+      localStorage.setItem(`hiddenBadges_${walletAddress}`, JSON.stringify(updatedHiddenBadges));
+      
+      // Reload badges to show the restored badge
+      loadOwnedBadges(walletAddress, showHiddenBadges);
+      
+      alert('Badge restored to dashboard!');
+    }
+  };
+
+  const toggleShowHidden = () => {
+    const newShowHidden = !showHiddenBadges;
+    setShowHiddenBadges(newShowHidden);
+    loadOwnedBadges(walletAddress, newShowHidden);
   };
 
   if (!walletAddress) {
@@ -379,19 +452,30 @@ const Claim = () => {
       {/* Owned Badges Section */}
       <div className="owned-badges-section">
         <div className="section-header">
-          <h2>🏆 Your Badges</h2>
-          <p>Blockchain-verified badges in your wallet</p>
-          <button 
-            className="refresh-btn"
-            onClick={() => loadOwnedBadges(walletAddress)}
-            disabled={isLoadingBadges}
-          >
-            {isLoadingBadges ? (
-              <div className="spinner small"></div>
-            ) : (
-              '🔄 Refresh'
-            )}
-          </button>
+          <div>
+            <h2>🏆 Your Badges</h2>
+            <p>Blockchain-verified badges in your wallet</p>
+          </div>
+          <div className="header-actions">
+            <button 
+              className="toggle-btn"
+              onClick={toggleShowHidden}
+              title={showHiddenBadges ? "Hide hidden badges" : "Show hidden badges"}
+            >
+              {showHiddenBadges ? '👁️ Hide Hidden' : '👁️‍🗨️ Show Hidden'}
+            </button>
+            <button 
+              className="refresh-btn"
+              onClick={() => loadOwnedBadges(walletAddress, showHiddenBadges)}
+              disabled={isLoadingBadges}
+            >
+              {isLoadingBadges ? (
+                <div className="spinner small"></div>
+              ) : (
+                '🔄 Refresh'
+              )}
+            </button>
+          </div>
         </div>
 
         <div className="badges-grid">
@@ -402,10 +486,10 @@ const Claim = () => {
             </div>
           ) : ownedBadges.length > 0 ? (
             ownedBadges.map((badge) => (
-              <div key={badge.assetId} className="badge-card">
+              <div key={badge.assetId} className={`badge-card ${badge.isHidden ? 'hidden-badge' : ''}`}>
                 <div className="badge-card-header">
-                  <div className={`badge-type-indicator ${badge.isTest ? 'test' : ''}`}>
-                    {badge.isTest ? 'TEST BADGE' : 'Badge'}
+                  <div className={`badge-type-indicator ${badge.isTest ? 'test' : ''} ${badge.isHidden ? 'hidden' : ''}`}>
+                    {badge.isHidden ? 'HIDDEN BADGE' : badge.isTest ? 'TEST BADGE' : 'Badge'}
                   </div>
                   <div className="badge-asset-id">#{badge.assetId}</div>
                 </div>
@@ -430,6 +514,26 @@ const Claim = () => {
                     <span className="detail-label">Creator:</span>
                     <span className="detail-value">{utils.formatAddress(badge.creator)}</span>
                   </div>
+                </div>
+
+                <div className="badge-actions">
+                  {badge.isHidden ? (
+                    <button 
+                      className="action-btn restore-btn"
+                      onClick={() => restoreBadge(badge.assetId)}
+                      title="Restore badge to dashboard"
+                    >
+                      🔄 Restore
+                    </button>
+                  ) : (
+                    <button 
+                      className="action-btn delete-btn"
+                      onClick={() => deleteBadge(badge.id || badge.assetId, badge.isTest, badge.assetId)}
+                      title={badge.isTest ? "Remove test badge from dashboard" : "Permanently hide badge from dashboard (does not affect blockchain asset)"}
+                    >
+                      🗑️ {badge.isTest ? 'Remove' : 'Hide Forever'}
+                    </button>
+                  )}
                 </div>
               </div>
             ))

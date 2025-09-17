@@ -611,10 +611,20 @@ body.light-mode .form-group select::placeholder {
 .section-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   margin-bottom: 25px;
   flex-wrap: wrap;
   gap: 15px;
+}
+
+.section-header > div {
+  flex: 1;
+}
+
+.header-actions {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
 }
 
 .section-header h2 {
@@ -655,6 +665,26 @@ body.light-mode .form-group select::placeholder {
 .refresh-btn:disabled {
   opacity: 0.7;
   cursor: not-allowed;
+}
+
+.toggle-btn {
+  background: var(--card-bg);
+  border: 2px solid var(--card-border);
+  padding: 10px 20px;
+  border-radius: 10px;
+  font-weight: 600;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toggle-btn:hover {
+  background: rgba(79, 70, 229, 0.1);
+  border-color: #4f46e5;
+  transform: translateY(-1px);
 }
 
 /* Badges Grid */
@@ -705,6 +735,45 @@ body.light-mode .form-group select::placeholder {
   100% { opacity: 1; }
 }
 
+.badge-type-indicator.hidden {
+  background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+  animation: hiddenBadgePulse 3s ease-in-out infinite alternate;
+}
+
+@keyframes hiddenBadgePulse {
+  0% { opacity: 0.5; }
+  100% { opacity: 0.8; }
+}
+
+.badge-card.hidden-badge {
+  opacity: 0.7;
+  border: 2px dashed var(--card-border);
+}
+
+.restore-btn {
+  background: rgba(16, 185, 129, 0.2);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.restore-btn:hover {
+  background: rgba(16, 185, 129, 0.3);
+  color: white;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(16, 185, 129, 0.2);
+}
+
+body.light-mode .restore-btn {
+  background: rgba(16, 185, 129, 0.1);
+  color: #059669;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+body.light-mode .restore-btn:hover {
+  background: rgba(16, 185, 129, 0.2);
+  color: #047857;
+}
+
 .badge-asset-id {
   font-family: 'Courier New', monospace;
   color: var(--text-muted);
@@ -728,6 +797,54 @@ body.light-mode .form-group select::placeholder {
   color: var(--text-secondary);
   font-size: 0.9rem;
   margin: 0;
+}
+
+/* Badge Actions */
+.badge-actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--card-border);
+}
+
+.action-btn {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  border: none;
+  border-radius: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.delete-btn {
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.delete-btn:hover {
+  background: rgba(239, 68, 68, 0.3);
+  color: white;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(239, 68, 68, 0.2);
+}
+
+body.light-mode .delete-btn {
+  background: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+body.light-mode .delete-btn:hover {
+  background: rgba(239, 68, 68, 0.2);
+  color: #991b1b;
 }
 
 .detail-item {

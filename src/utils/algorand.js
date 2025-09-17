@@ -661,12 +661,14 @@ export const getBadgesOwnedByAddress = async (address) => {
         try {
           const assetInfo = await algodClient.getAssetByID(badge.assetId).do();
           return {
+            id: `real_${badge.assetId}`, // Add unique ID for deletion functionality
             assetId: badge.assetId,
             name: assetInfo.params.name,
             unitName: assetInfo.params['unit-name'],
             url: assetInfo.params.url,
             total: assetInfo.params.total,
-            creator: assetInfo.params.creator
+            creator: assetInfo.params.creator,
+            isTest: false
           };
         } catch (error) {
           console.error(`Error fetching asset ${badge.assetId}:`, error);
@@ -715,9 +717,38 @@ const waitForConfirmation = async (txId, maxRounds = 10) => {
 /**
  * Generate claim URL for a badge
  */
-export const generateClaimUrl = (eventId, assetId) => {
-  const baseUrl = window.location.origin;
-  return `${baseUrl}/claim?event=${eventId}&badge=${assetId}`;
+export const generateClaimUrl = (eventId, assetId, options = {}) => {
+  const baseUrl = options.customDomain || window.location.origin;
+  const url = `${baseUrl}/claim?event=${eventId}&badge=${assetId}`;
+  
+  if (options.forSharing && !options.customDomain) {
+    // For development mode, return a template URL
+    return url.replace(window.location.origin, 'https://your-domain.com');
+  }
+  
+  return url;
+};
+
+/**
+ * Generate manual claim instructions for participants
+ */
+export const generateManualClaimInstructions = (eventId, assetId, eventName = 'Event', badgeType = 'Badge') => {
+  const claimUrl = generateClaimUrl(eventId, assetId, { forSharing: true });
+  
+  return `ChainBadge Manual Claim Instructions:
+
+Event: ${eventName}
+Badge Type: ${badgeType}
+Asset ID: ${assetId}
+
+Steps:
+1. Open: ${claimUrl}
+2. Connect your Pera Wallet
+3. Either scan QR code or use Manual Claim with:
+   - Event Name: ${eventName}
+   - Badge Type: ${badgeType}
+
+Note: Replace 'your-domain.com' with your actual domain name.`;
 };
 
 /**

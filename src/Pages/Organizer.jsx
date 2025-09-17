@@ -9,6 +9,7 @@ import {
   createBadgeAssetTest,  // Add test function
   createRealBadgeAsset,  // Add real function
   generateClaimUrl,
+  generateManualClaimInstructions,
   utils 
 } from '../utils/algorand';
 import'../styles/Organizer.css'
@@ -19,13 +20,16 @@ const Organizer = () => {
   const { darkMode } = useTheme();
   const navigate = useNavigate();
   
-  // Event Form State
   const [eventForm, setEventForm] = useState({
     eventName: '',
     eventDescription: '',
     eventDate: '',
     eventLocation: ''
   });
+  
+  // Custom domain for sharing (for development)
+  const [customDomain, setCustomDomain] = useState('');
+  const [showDomainInput, setShowDomainInput] = useState(false);
   
   // Badge Creation State
   const [createdBadges, setCreatedBadges] = useState([]);
@@ -128,6 +132,11 @@ const Organizer = () => {
       if (result.success) {
         const eventId = `event_${Date.now()}`;
         const claimUrl = generateClaimUrl(eventId, result.assetId);
+        const sharingUrl = generateClaimUrl(eventId, result.assetId, { 
+          forSharing: true, 
+          customDomain: customDomain || undefined 
+        });
+        const manualInstructions = generateManualClaimInstructions(eventId, result.assetId);
         
         const newBadge = {
           id: result.assetId,
@@ -136,6 +145,8 @@ const Organizer = () => {
           badgeType: badgeType,
           txId: result.txId,
           claimUrl: claimUrl,
+          sharingUrl: sharingUrl,
+          manualInstructions: manualInstructions,
           createdAt: new Date().toISOString(),
           metadata: result.metadata,
           creator: walletAddress
@@ -192,6 +203,32 @@ const Organizer = () => {
       alert('Failed to copy to clipboard');
     }
   };
+
+  const copyManualInstructions = async (badge) => {
+    const instructions = `ChainBadge Manual Claim Instructions:
+
+Event: ${badge.eventName}
+Badge Type: ${badge.badgeType}
+Asset ID: ${badge.id}
+
+Steps:
+1. Open: ${badge.sharingUrl}
+2. Connect your Pera Wallet
+3. Either scan QR code or use Manual Claim with:
+   - Event Name: ${badge.eventName}
+   - Badge Type: ${badge.badgeType}
+
+Note: Replace 'your-domain.com' with your actual domain name.`;
+    
+    try {
+      await navigator.clipboard.writeText(instructions);
+      alert('Manual claim instructions copied to clipboard!');
+    } catch (error) {
+      alert('Failed to copy instructions');
+    }
+  };
+
+  const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 
   const deleteBadge = (badgeId) => {
     const confirmDelete = window.confirm('Are you sure you want to delete this badge from the dashboard?\n\nNote: This only removes it from the UI. Real ASAs will still exist in your wallet.');
@@ -493,22 +530,48 @@ const Organizer = () => {
                 <div className="qr-section">
                   <div className="qr-code">
                     <img 
-                      src={generateQRCodeUrl(badge.claimUrl)} 
+                      src={generateQRCodeUrl(badge.sharingUrl)} 
                       alt={`QR Code for ${badge.badgeType} badge`}
                     />
                   </div>
                   <p className="qr-instructions">
-                    Participants can scan this QR code to claim their {badge.badgeType.toLowerCase()} badge
+                    {isLocalhost ? (
+                      <>
+                        ⚠️ <strong>Development Mode:</strong> QR code contains template URL.<br/>
+                        For production, replace 'your-domain.com' with your actual domain.
+                      </>
+                    ) : (
+                      `Participants can scan this QR code to claim their ${badge.badgeType.toLowerCase()} badge`
+                    )}
                   </p>
                 </div>
 
                 <div className="badge-actions">
-                  <button 
-                    className="action-btn copy-btn"
-                    onClick={() => copyToClipboard(badge.claimUrl)}
-                  >
-                    Copy Claim Link
-                  </button>
+                  {isLocalhost ? (
+                    <>
+                      <button 
+                        className="action-btn copy-btn"
+                        onClick={() => copyManualInstructions(badge)}
+                        title="Copy manual claim instructions for development"
+                      >
+                        📋 Copy Instructions
+                      </button>
+                      <button 
+                        className="action-btn copy-btn"
+                        onClick={() => copyToClipboard(badge.sharingUrl)}
+                        title="Copy template URL (needs domain replacement)"
+                      >
+                        🔗 Copy Template URL
+                      </button>
+                    </>
+                  ) : (
+                    <button 
+                      className="action-btn copy-btn"
+                      onClick={() => copyToClipboard(badge.sharingUrl)}
+                    >
+                      Copy Claim Link
+                    </button>
+                  )}
                   <button 
                     className="action-btn view-btn"
                     onClick={() => window.open(badge.claimUrl, '_blank')}
