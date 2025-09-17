@@ -365,11 +365,68 @@ export const createBadgeAsset = async (eventName, badgeType, recipientAddress = 
     
     console.log('Waiting for wallet signature...');
     const signedTxns = await Promise.race([signingPromise, signingTimeoutPromise]);
+    
+    console.log('Raw signed transaction response:', signedTxns);
+    console.log('First signed transaction:', signedTxns[0]);
+    
+    // Ensure we have a valid signed transaction
+    if (!signedTxns || !signedTxns[0]) {
+      throw new Error('No signed transaction received from wallet');
+    }
 
     console.log('Transaction signed, submitting...');
+    console.log('Signed transaction type:', typeof signedTxns[0]);
+    console.log('Signed transaction:', signedTxns[0]);
+    
+    // Validate that we have a proper signed transaction
+    let signedTxn = signedTxns[0];
+    
+    // Handle different return formats from Pera Wallet
+    if (!(signedTxn instanceof Uint8Array)) {
+      console.log('Signed transaction is not Uint8Array, attempting to convert...');
+      
+      // If it's a base64 string, decode it
+      if (typeof signedTxn === 'string') {
+        try {
+          // Use browser-compatible base64 decoding
+          const binaryString = atob(signedTxn);
+          signedTxn = new Uint8Array(binaryString.length);
+          for (let i = 0; i < binaryString.length; i++) {
+            signedTxn[i] = binaryString.charCodeAt(i);
+          }
+          console.log('Successfully converted base64 string to Uint8Array');
+        } catch (conversionError) {
+          console.error('Failed to convert base64 string:', conversionError);
+          throw new Error('Failed to convert signed transaction from base64');
+        }
+      }
+      // If it's an object with a 'blob' property (some wallet formats)
+      else if (signedTxn && signedTxn.blob) {
+        signedTxn = signedTxn.blob;
+      }
+      // If it's still not a Uint8Array, try to encode it
+      else {
+        try {
+          signedTxn = algosdk.encodeUnsignedTransaction(signedTxn);
+          console.log('Encoded transaction to Uint8Array');
+        } catch (encodeError) {
+          console.error('Failed to encode transaction:', encodeError);
+          throw new Error('Unable to convert signed transaction to proper format');
+        }
+      }
+    }
+    
+    // Final validation
+    if (!(signedTxn instanceof Uint8Array)) {
+      console.error('Final validation failed. Signed transaction type:', typeof signedTxn);
+      throw new Error('Signed transaction is not in the correct format after conversion attempts');
+    }
+    
+    console.log('Final signed transaction is Uint8Array with length:', signedTxn.length);
 
     // Submit transaction with timeout
-    const submitPromise = algodClient.sendRawTransaction(signedTxns[0]).do();
+    // The signedTxns[0] should already be in the correct Uint8Array format from Pera Wallet
+    const submitPromise = algodClient.sendRawTransaction(signedTxn).do();
     const timeoutPromise = new Promise((_, reject) => {
       setTimeout(() => reject(new Error('Transaction submission timeout after 30 seconds')), 30000);
     });
@@ -531,7 +588,7 @@ export const claimBadge = async (assetId, organizerAddress) => {
 };
 
 /**
- * SIMPLIFIED CLAIM - Create badge directly to claimer (MVP version)
+ * SIMPLIFIED CLAIM - Create badge directly to claimer (MVP version) with fallback
  */
 export const claimBadgeSimple = async (eventName, badgeType) => {
   if (!connectedAccount) {
@@ -539,7 +596,8 @@ export const claimBadgeSimple = async (eventName, badgeType) => {
   }
 
   try {
-    // Create badge directly to the connected wallet
+    console.log('Attempting real badge creation...');
+    // Try to create real badge first
     const result = await createBadgeAsset(eventName, badgeType, connectedAccount);
     
     if (result.success) {
@@ -548,18 +606,38 @@ export const claimBadgeSimple = async (eventName, badgeType) => {
         message: `${badgeType} badge claimed successfully!`,
         assetId: result.assetId,
         txId: result.txId,
-        badgeInfo: result.metadata
+        badgeInfo: result.metadata,
+        isTest: false
       };
     } else {
       throw new Error(result.error);
     }
 
   } catch (error) {
-    console.error('Simple badge claiming failed:', error);
-    return {
-      success: false,
-      error: error.message
-    };
+    console.error('Real badge creation failed:', error.message);
+    console.log('Activating fallback to test mode...');
+    
+    // Automatic fallback to test mode for development continuity
+    try {
+      const testResult = await createBadgeAssetTest(eventName, badgeType);
+      console.log('✅ Fallback test badge created successfully');
+      
+      return {
+        success: true,
+        message: `${badgeType} badge claimed successfully (Test Mode)`,
+        assetId: testResult.assetId,
+        txId: testResult.txId,
+        badgeInfo: testResult.metadata,
+        isTest: true,
+        fallbackReason: error.message
+      };
+    } catch (testError) {
+      console.error('Test mode fallback also failed:', testError);
+      return {
+        success: false,
+        error: `Both real and test mode failed: ${error.message}`
+      };
+    }
   }
 };
 

@@ -106,31 +106,22 @@ const Claim = () => {
     try {
       console.log(`Claiming ${badgeType} badge for ${eventName}...`);
       
-      // Try real badge creation first
-      let result;
-      try {
-        console.log('Attempting REAL badge creation...');
-        result = await claimBadgeSimple(eventName, badgeType);
-        console.log('Real badge claim result:', result);
-      } catch (realError) {
-        console.log('Real badge creation failed, falling back to test mode:', realError.message);
-        console.log('Using test mode due to wallet signing issues...');
-        result = await createBadgeAssetTest(eventName, badgeType);
-        console.log('Test badge claim result:', result);
-      }
+      // Call claimBadgeSimple which now handles real/test fallback internally
+      const result = await claimBadgeSimple(eventName, badgeType);
+      console.log('Badge claim result:', result);
       
-      console.log('Claim result:', result);
       setClaimResult(result);
       
       if (result.success) {
-        // For test badges, store them locally since they're not real blockchain assets
+        // Handle badge storage based on whether it's test or real
         if (result.isTest) {
+          // For test badges, store them locally
           const testBadges = JSON.parse(localStorage.getItem('testBadges') || '[]');
           const newTestBadge = {
             assetId: result.assetId,
-            name: result.metadata.name,
+            name: result.badgeInfo.name,
             unitName: 'BADGE',
-            creator: walletAddress, // Use current wallet as creator for test
+            creator: walletAddress,
             isTest: true,
             claimedAt: new Date().toISOString()
           };
