@@ -30,12 +30,21 @@ ChainBadge redefines event participation by leveraging *blockchain technology* t
 
 ---
 
-## 🛠 Tech Stack  
-- *Blockchain:* Ethereum / Polygon  
-- *Smart Contracts:* Solidity  
-- *Frontend:* React.js + TailwindCSS  
-- *Wallet Integration:* MetaMask / WalletConnect  
-- *Design Tools:* Figma, Adobe Suite  
+## 🛠 Architecture & Tech Stack
+
+- *Blockchain: Algorand (for decentralized, scalable, and low-cost transactions)
+
+- *SDK: Algorand SDK (JavaScript / Python for badge issuance, storage & verification)
+
+- *Wallet: Pera Wallet (for storing and verifying event badges)
+
+- *Frontend: React + CSS (responsive UI for organizers and attendees)
+
+- *Design Tools: Figma, Adobe Suite (for UI/UX and badge design assets)
+
+- *Storage: Algorand blockchain & optional IPFS for badge metadata/images
+
+Integration: Directly through SDK calls — no custom smart contracts required
 
 ---
 
